@@ -1,0 +1,494 @@
+---
+title: "Data Analysis Assignment III"
+author: "Dean Huang"
+date: "9/11/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+library(xtable)
+library(rms)
+library(arm)
+library(pROC)
+library(e1071)
+library(caret)
+require(gridExtra)
+library(pander)
+```
+
+```{r echo=FALSE}
+smoking<-read.csv('C:/Users/Dean Huang/Documents/Duke University (MIDS 2022)/Fall 2020/IDS 702/Dataset/smoking.csv',stringsAsFactors = FALSE, sep = ",",dec=",")
+
+smoking$edu<-factor(smoking$med)
+smoking$income<-factor(smoking$inc)
+smoking$sm<-factor(smoking$smoke)
+smoking$med[smoking$med==6 | smoking$med==7]<-6
+smoking$mrace[smoking$mrace<6]<-0
+smoking$mhtc <- smoking$mht - mean(smoking$mht)
+smoking$magec<-smoking$mage-mean(smoking$mage)
+smoking$mpregwtc <- smoking$mpregwt - mean(smoking$mpregwt)
+smoking$racem<-factor(smoking$mrace)
+smoking$parityc<-smoking$parity - mean(smoking$parity)
+smoking$PM <- rep(0,nrow(smoking))
+smoking$PM[smoking$gestation<270]<-1
+smoking$PMF<-factor(smoking$PM)
+```
+
+```{r echo=FALSE,results="hide",fig.show='hide',warning=FALSE,message=FALSE}
+#Exploratory Data Analysis
+
+#Parity
+ggplot(smoking,aes(x=parityc, y=PMF, fill=PMF)) +
+  geom_boxplot() + #coord_flip()# +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Parity vs PM",
+       x="Parity",y='PM') + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#Mother's Age
+ggplot(smoking,aes(x=magec, y=PMF, fill=PMF)) +
+  geom_boxplot() + #coord_flip()# +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Mother's Age vs PM",
+       x="Mother's Age",y='PM') + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#Mother's Height
+ggplot(smoking,aes(x=mhtc, y=PMF, fill=PMF)) +
+  geom_boxplot() + #coord_flip()# +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Mother's Height vs PM",
+       x="Mother's Height",y='PM') + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#Mother's Weight
+ggplot(smoking,aes(x=mpregwtc, y=PMF, fill=PMF)) +
+  geom_boxplot() + #coord_flip()# +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Mother's Pre-pregnancy Weight vs PM",
+       x="Mother's Pre-pregnancy Weight",y='PM') + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#Race
+table(smoking[,c("PM","racem")])
+table(smoking[,c("PM","racem")])/sum(table(smoking[,c("PM","racem")]))
+
+apply(table(smoking[,c("PM","racem")])/sum(table(smoking[,c("PM","racem")])),
+      2,function(x) x/sum(x)) 
+chisq.test(table(smoking[,c("PM","racem")]))
+#Education
+table(smoking[,c("PM","edu")])
+table(smoking[,c("PM","edu")])/sum(table(smoking[,c("PM","edu")]))
+
+apply(table(smoking[,c("PM","edu")])/sum(table(smoking[,c("PM","edu")])),
+      2,function(x) x/sum(x)) 
+chisq.test(table(smoking[,c("PM","edu")]))
+#Income
+table(smoking[,c("PM","income")])
+table(smoking[,c("PM","income")])/sum(table(smoking[,c("PM","income")]))
+
+
+apply(table(smoking[,c("PM","income")])/sum(table(smoking[,c("PM","income")])),
+      2,function(x) x/sum(x)) 
+chisq.test(table(smoking[,c("PM","income")]))
+#Smoking
+table(smoking[,c("PM","sm")])
+table(smoking[,c("PM","sm")])/sum(table(smoking[,c("PM","sm")]))
+
+apply(table(smoking[,c("PM","sm")])/sum(table(smoking[,c("PM","sm")])),
+      2,function(x) x/sum(x)) 
+chisq.test(table(smoking[,c("PM","sm")]))
+
+#Binned Plot
+binnedplot(y=smoking$PM,smoking$parityc,xlab="Parity",ylim=c(0,1),col.pts="navy",
+           ylab ="Premature",main="Binned Parity and Premature",
+           col.int="white")
+
+binnedplot(y=smoking$PM,smoking$magec,xlab="Mother's Age",ylim=c(0,1),col.pts="navy",
+           ylab ="Premature",main="Binned Mother's Age and Premature",
+           col.int="white")
+
+binnedplot(y=smoking$PM,smoking$mhtc,xlab="Mother's Height",ylim=c(0,1),col.pts="navy",
+           ylab ="Premature",main="Binned Mother's Height and Premature",
+           col.int="white")
+
+binnedplot(y=smoking$PM,smoking$mpregwtc,xlab="Mother's Pre-pregnancy Weight",ylim=c(0,1),col.pts="navy",
+           ylab ="Premature",main="Binned Mother's Pre-pregnancy Weight and Premature",
+           col.int="white")
+# #Interaction
+# 
+# #parity*smoke
+# ggplot(smoking,aes(x=parity, y=PMF, fill=PMF)) +
+#   geom_boxplot() + #coord_flip() +
+#   scale_fill_brewer(palette="Reds") +
+#   labs(title="Parity vs Premature, by Smoke",
+#        x="Parity",y="Premature") + 
+#   theme_classic() + theme(legend.position="none") +
+#   facet_wrap( ~ sm)+theme(plot.title = element_text(hjust = 0.5))
+# #mhtc*smoke
+# ggplot(smoking,aes(x=mhtc, y=PMF, fill=PMF)) +
+#   geom_boxplot() + #coord_flip() +
+#   scale_fill_brewer(palette="Reds") +
+#   labs(title="Mother's Height vs Premature, by Smoke",
+#        x="Mother's Height",y="Premature") + 
+#   theme_classic() + theme(legend.position="none") +
+#   facet_wrap( ~ sm)+theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE,results="hide",fig.show='hide',warning=FALSE,message=FALSE}
+#Model Fitting
+sm1 <- glm(PMF~parityc+racem+magec+edu+mhtc+mpregwtc+income+sm,family=binomial, data=smoking)
+summary(sm1)
+
+#Model Diagnostic
+#save the raw residuals
+rawresid1 <- residuals(sm1,"resp")
+#binned residual plots
+binnedplot(x=fitted(sm1),y=rawresid1,xlab="Pred. probabilities",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#Parity
+binnedplot(x=smoking$parityc,y=rawresid1,xlab="Parity",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mage
+binnedplot(x=smoking$magec,y=rawresid1,xlab="Mother's Age",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mhtc
+binnedplot(x=smoking$mhtc,y=rawresid1,xlab="Mother's Height",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mpregwtc
+binnedplot(x=smoking$mpregwtc,y=rawresid1,xlab="Mother's Pre-pregnancy Weight",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+
+```
+```{r echo=FALSE,results="hide",fig.show='hide',warning=FALSE,message=FALSE}
+#Model Validation
+#Confusion matrix with .5 threshold
+Conf_mat <- confusionMatrix(as.factor(ifelse(fitted(sm1) >= 0.5, "1","0")),
+                            as.factor(smoking$PMF),positive = "1")
+Conf_mat$table
+Conf_mat$overall["Accuracy"];
+Conf_mat$byClass[c("Sensitivity","Specificity")] #True positive rate and True negative rate
+#first, let's repeat with the marginal percentage in the data
+mean(smoking$PM)
+Conf_mat <- confusionMatrix(as.factor(ifelse(fitted(sm1) >= mean(smoking$PM), "1","0")),
+                            as.factor(smoking$PM),positive = "1")
+Conf_mat$table
+Conf_mat$overall["Accuracy"];
+Conf_mat$byClass[c("Sensitivity","Specificity")]
+#huge difference!  seems a lot of predicted probabilities are in the .5 yo .58  range, so cutoff matters.
+#either way, we have large off-diagonal numbers. specificity is sensitive to the cutoff
+
+#look at ROC curve
+roc(smoking$PM,fitted(sm1),plot=T,print.thres="best",legacy.axes=T,
+    print.auc =T,col="red3")
+```
+
+```{r echo=FALSE,results="hide",fig.show='hide',warning=FALSE,message=FALSE}
+#Model Building 
+smoking$logmpregwt=log(smoking$mpregwt)
+smoking$logmhtc=log(smoking$mhtc)
+smoking$logmpregwt_c = smoking$logmpregwt - mean(smoking$logmpregwt)
+smoking$mhtc2=smoking$mhtc^2
+#smoking$logparity=log(smoking$parity)
+#smoking$logparity_c = smoking$logparity - mean(smoking$logparity)
+sm2 <- glm(PMF~parityc+racem+magec+edu+mhtc+mhtc2+mpregwtc+income+sm,family=binomial, data=smoking)
+summary(sm2)
+
+#save the raw residuals
+rawresid2 <- residuals(sm2,"resp")
+
+#binned residual plots
+binnedplot(x=fitted(sm2),y=rawresid2,xlab="Pred. probabilities",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#Parity
+binnedplot(x=smoking$parityc,y=rawresid2,xlab="Parity",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mage
+binnedplot(x=smoking$magec,y=rawresid2,xlab="Mother's Age",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mhtc
+binnedplot(x=smoking$mhtc2,y=rawresid2,xlab="Mother's Height (mht^2)",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mpregwtc
+binnedplot(x=smoking$mpregwtc,y=rawresid2,xlab="Mother's Pre-pregnancy Weight",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+
+
+#first, let's repeat with the marginal percentage in the data
+mean(smoking$PM)
+Conf_mat <- confusionMatrix(as.factor(ifelse(fitted(sm2) >= mean(smoking$PM), "1","0")),
+                            as.factor(smoking$PM),positive = "1")
+Conf_mat$table
+Conf_mat$overall["Accuracy"];
+Conf_mat$byClass[c("Sensitivity","Specificity")]
+
+
+#look at ROC curve
+roc(smoking$PM,fitted(sm2),plot=T,print.thres="best",legacy.axes=T,
+    print.auc =T,col="red3")
+
+#let's compare this roc curve to the previous one
+roc(smoking$PM,fitted(sm1),plot=T,legacy.axes=T,print.auc =T,col="red3")
+roc(smoking$PM,fitted(sm2),plot=T,legacy.axes=T,col="blue3",add=T)
+legend('bottomright', c('oldmodel','newmodel'),lty=c(1,1),
+       lwd=c(2,2),col=c('red3','blue3'))
+```
+
+```{r echo=FALSE,results="hide",fig.show='hide',warning=FALSE,message=FALSE}
+#let's see what happens if we collapse parity to 2 levels
+smoking$paritynew <- rep(0,nrow(smoking))
+smoking$paritynew[smoking$parityc > 2] <- 1
+table(smoking$parityc,smoking$paritynew)
+
+sm3<-glm(PMF~paritynew+racem+magec+edu+mhtc+logmpregwt_c+income+sm,family=binomial, data=smoking)
+summary(sm3)
+rawresid3 <- residuals(sm3,"resp")
+#binned residual plots
+binnedplot(x=fitted(sm3),y=rawresid3,xlab="Pred. probabilities",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mpregwt
+binnedplot(x=smoking$logmpregwt_c,y=rawresid3,xlab="Pre-pregnancy Weight",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mage
+binnedplot(x=smoking$magec,y=rawresid3,xlab="Mother's Age",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mhtc
+binnedplot(x=smoking$mhtc,y=rawresid3,xlab="Mother's Height",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+tapply(rawresid3, smoking$paritynew, mean) 
+```
+
+```{r echo=FALSE,results="hide",fig.show='hide',warning=FALSE,message=FALSE}
+### Interactions in logistic regression
+#lets set up the graphics device to show two plots side by side 
+par(mfcol=c(2,1))
+
+#mpregwt_c VS Premature by Smoke
+#first plot for smoke = 0
+binnedplot(smoking$mpregwtc[smoking$smoke==0], y=smoking$PM[smoking$smoke==0], 
+           xlab = "Pre-pregnancy Weight", ylab = "Premature", main = "Binned Pre-pregnancy Weight and Premature cases") 
+
+#next the plot for smoke = 1
+binnedplot(smoking$mpregwtc[smoking$smoke==1], y=smoking$PM[smoking$smoke==1], 
+           xlab = "Pre-pregnancy Weight", ylab = "Premature cases", main = "Binned Pre-pregnancy Weight and Premature cases") 
+
+#mhtc VS Premature by Smoke
+#first plot for smoke = 0
+binnedplot(smoking$mhtc[smoking$smoke==0], y=smoking$PM[smoking$smoke==0], 
+           xlab = "mhtc", ylab = "Premature", main = "Binned Mother's Height and Premature cases") 
+
+#next the plot for smoke = 1
+binnedplot(smoking$mhtc[smoking$smoke==1], y=smoking$PM[smoking$smoke==1], 
+           xlab = "mhtc", ylab = "Premature cases", main = "Binned Mother's Heigt and Premature cases") 
+
+#magec VS Premature by Smoke
+#first plot for smoke = 0
+binnedplot(smoking$magec[smoking$smoke==0], y=smoking$PM[smoking$smoke==0], 
+           xlab = "magec", ylab = "Premature", main = "Binned Mother's Age and Premature cases") 
+
+#next the plot for smoke = 1
+binnedplot(smoking$magec[smoking$smoke==1], y=smoking$PM[smoking$smoke==1], 
+           xlab = "magec", ylab = "Premature cases", main = "Binned Mother's Age and Premature cases") 
+
+Premature_white=smoking$PM[smoking$mrace==0]
+smoke_white=smoking$smoke[smoking$mrace==0]
+table(Premature_white,smoke_white)/sum(table(Premature_white, smoke_white))
+chisq.test(table(Premature_white,smoke_white))
+
+Premature_mexican=smoking$PM[smoking$mrace==6]
+smoke_mexican=smoking$smoke[smoking$mrace==6]
+table(Premature_mexican,smoke_mexican)/sum(table(Premature_mexican, smoke_mexican))
+chisq.test(table(Premature_mexican,smoke_mexican))
+
+Premature_black=smoking$PM[smoking$mrace==7]
+smoke_black=smoking$smoke[smoking$mrace==7]
+table(Premature_black,smoke_black)/sum(table(Premature_black, smoke_black))
+chisq.test(table(Premature_black,smoke_black))
+
+Premature_asian=smoking$PM[smoking$mrace==8]
+smoke_asian=smoking$smoke[smoking$mrace==8]
+table(Premature_asian,smoke_asian)/sum(table(Premature_asian, smoke_asian))
+chisq.test(table(Premature_asian,smoke_asian))
+
+Premature_mix=smoking$PM[smoking$mrace==9]
+smoke_mix=smoking$smoke[smoking$mrace==9]
+table(Premature_mix,smoke_mix)/sum(table(Premature_mix, smoke_mix))
+chisq.test(table(Premature_mix,smoke_mix))
+
+
+
+#let's first try the model with all the interactions 
+#sm4 = glm(PMF~parityc+racem+magec+edu+mhtc+logmpregwt_c+income+sm++sm*(logmpregwt_c)+sm*racem,family=binomial, data=smoking)
+#summary(sm4)
+
+#these collectively look sort of useful, especially the education ones! 
+
+#change in deviance tests to see if the full set of interactions are useful.
+
+#anova(sm4, sm3, test= "Chisq")
+
+```
+
+```{r echo=FALSE,results="hide", fig.show='hide',warning=FALSE,message=FALSE}
+#let's use the stepwise function to do model selection (using AIC)
+n <- nrow(smoking)
+smoking$paritynewf<-factor(smoking$paritynew)
+smf<-glm(PM~parityc+parityc*(racem + mage + edu + mhtc+ mpregwtc+income +smoke)+racem+magec+edu+mhtc+mpregwtc+income+sm+sm*(racem + mage + edu + mhtc+ mpregwtc+income +parityc),family=binomial, data=smoking)
+null_model <- glm(PM~1,data=smoking,family=binomial)
+step(null_model,scope=formula(sm2),direction="both",
+     trace=0)
+smfinal<-glm(formula = PM ~ racem + mpregwtc + sm +edu , family = binomial, 
+    data = smoking)
+summary(smfinal)
+
+vif(smfinal)
+
+rawresid4 <- residuals(smfinal,"resp")
+#binned residual plots
+binnedplot(x=fitted(smfinal),y=rawresid4,xlab="Pred. probabilities",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mpregwt
+binnedplot(x=smoking$logmpregwt_c,y=rawresid4,xlab="Pre-pregnancy Weight",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mage
+binnedplot(x=smoking$magec,y=rawresid4,xlab="Mother's Age",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+#mhtc
+binnedplot(x=smoking$mhtc,y=rawresid4,xlab="Mother's Height",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+tapply(rawresid4, smoking$paritynew, mean) 
+#Check Outliers
+n <- nrow(model.matrix(smfinal)); p <- ncol(model.matrix(smfinal))
+lev_scores <- hatvalues(smfinal) #can also use influence(regwagecsquares)$hat 
+plot(lev_scores,col=ifelse(lev_scores > (2*p/n), 'red2', 'navy'),type="h",
+ylab="Leverage score",xlab="Index",main="Leverage Scores for all observations")
+text(x=c(1:n)[lev_scores > (2*p/n)]+c(rep(2,4),-2,2),y=lev_scores[lev_scores > (2*p/n)], labels=c(1:n)[lev_scores > (2*p/n)])
+plot(smfinal, which = 4, col= c('blue'))
+plot(smfinal, which = 5, col= c('blue4'))
+
+
+#first, let's repeat with the marginal percentage in the data
+mean(smoking$PM)
+Conf_mat <- confusionMatrix(as.factor(ifelse(fitted(smfinal) >= mean(smoking$PM), "1","0")),
+                            as.factor(smoking$PM),positive = "1")
+Conf_mat$table
+Conf_mat$overall["Accuracy"];
+Conf_mat$byClass[c("Sensitivity","Specificity")]
+#huge difference!  seems a lot of predicted probabilities are in the .5 yo .58  range, so cutoff matters.
+#either way, we have large off-diagonal numbers. specificity is sensitive to the cutoff
+
+#look at ROC curve
+roc(smoking$PM,fitted(smfinal),plot=T,print.thres="best",legacy.axes=T,
+    print.auc =T,col="red3")
+
+#let's compare this roc curve to the previous one
+roc(smoking$PM,fitted(sm1),plot=T,legacy.axes=T,print.auc =T,col="red3")
+roc(smoking$PM,fitted(smfinal),plot=T,legacy.axes=T,col="blue3",add=T)
+legend('bottomright', c('initial model','final model'),lty=c(1,1),
+       lwd=c(2,2),col=c('red3','blue3'))
+```
+
+```{r echo=FALSE,results="hide",warning=FALSE,message=FALSE}
+smfinal<-glm(formula = PM ~ edu + racem + mpregwtc + sm+sm*edu, family = binomial, 
+    data = smoking)
+sm11<-glm(formula = PM ~ edu + racem + mpregwtc + sm, family = binomial, 
+    data = smoking)
+sm5<-glm(formula = PM ~ edu + racem + mpregwtc + sm + racem*sm, family = binomial, 
+    data = smoking)
+sm6<-glm(formula = PM ~ edu + racem + mpregwtc + sm + mpregwtc*sm, family = binomial, data = smoking)
+sm7<-glm(formula = PM ~ edu + racem + mpregwtc + sm + mage+ mage*sm, family = binomial, 
+    data = smoking)
+sm8<-glm(formula = PM ~ edu + racem + mpregwtc + sm + income + parityc+ parityc*sm, family = binomial, 
+    data = smoking)
+sm9<-glm(formula = PM ~ racem + mpregwtc + sm , family = binomial, 
+    data = smoking)
+anova(smfinal, sm11,test= "Chisq")
+summary(smfinal)
+```
+#### **Summary**\newline 
+
+The goal of this report is to address the question “Do mothers who smoke tend to have higher chances of pre-term birth than mothers who do not smoke?". In addition, we are trying to find out if odd ratio of pre-term birth for smokers and non-smokers differs by mother’s race. Boxplots and binned plots will be used to analyze the association between binary response variable and numeric predictor variable. On the other hand, joint probability table and conditional probability table will be used to analyze the association between binary response variable and categorical predictor variable. Binned residual plot will be used to evaluate the overall fit of regression model, and check if the function of numeric predictors is well specified. Chi-squared test will be used to compare the deviance of null model and new model. Confusion matrix and ROC curve will be used to validate the performance of the model through calculation of sensitivity, specificity, accuracy, and AUC curve. VIF will be used to calculate the multicollinearity of the function. The outcome of the study shows mothers who smoke tend to have higher odds of experiencing premature birth than mother who do not smoke. However, there is not enough evidence to conclude that the association between smoking and premature birth differs by mother's race.
+
+#### **Introduction**\newline 
+
+Since the goal is to find out the association between the smoking status of mother and pre-term birth, variables that are either irrelevant or insignificant to our question will be removed. These variables include id, birth, gestation, bwt, drace, dage, ded, dht, dwt, marital, time, and number. The response variable we are interested in looking to is premature, and the predictor variables we are interested in looking to are parity, mrace, mage, med, mht, mpregwt,income, and smoke. To facilitate the EDA, data modeling, and model validation processes, we will remove data rows with one or more missing values. After completing data modeling and model validation, the estimated range for the difference of odds ratio in pre-term birth for smokers and non-smokers will be calculated from the final model. Interesting associations with odds of pre-term birth will also be highlighted. The experiment will begin with EDA with the goal of checking the association of predictor variables and response variable, and highlight the preliminary concerns for the response and predictor variables. Next, preliminary logistic model fitting will be performed (excluding interactions and transformation) to understand the significance of coefficients for each selected predictor variables. Binned residual plots will be utilized to assess the overall fit of regression model and check if the function of predictors is well specified. Next, preliminary model validation will be performed to understand the fit of model for making prediction. Confusion matrix and ROC curve will be utilized to validate the performance of the model through calculation of sensitivity, specificity, and accuracy. Through careful analysis of the results from EDA, preliminary model fitting and preliminary model validation, transformation will be performed, and interactions will be added to improve the fit of the model. Logistic model fitting and model validation processes will be performed again to justify each modification made to the model. In addition, chi-squared test will be implemented to compare the performance of new model to the original. Lastly, stepwise function will be performed to find the optimal model with the lowest AIC score. To ensure the final model fulfill the assumptions of logistic regression, model validation will be performed again. Last but not least, VIF will be used to check for any multicollinearity for the final model. 
+
+#### **Data**\newline 
+
+Since there are no continuous predictor variables, binned plot is not suitable to use for this EDA. Boxplot will be used to determine the significance of discrete predictor variables, which include parity, mother’s age, mother’s height, and mother’s pre-pregnancy weight. According to the boxplot of parity vs premature, the distribution and median for both 0 and 1 binary response appears the be the same; therefore, parity appears not to be a significant predictor variable for calculating premature. The boxplot of mother’s age vs premature shows the distribution for both 0 and 1 binary response appears the be the same; however, the medians for both binary outcomes are different (more testing is needed to determine if mother’s age is significant for predicting premature). The boxplot of mother’s height vs premature shows the median for both 0 and 1 binary response appears the be the same; however, the distribution for both binary outcomes are slightly different (more testing is needed to determine if mother’s height is significant for predicting premature). The boxplot of mother’s pre-pregnancy weight vs premature shows the median for both 0 and 1 binary response appears the be the same; however, the distribution for both binary outcomes are slightly different (more testing is needed to determine if mother’s pre-pregnancy weight is significant for predicting premature). Since mother’s race, mother’s education, income, and smoking status are categorical variables, conditional probability table and chi-squared test will be utilized to determine the significance of these predictor variables. The conditional probability table for mother’s race shows the difference in distribution of conditional probability for some races like mix and white. In addition, the chi-squared test reaffirms the observation by having a p-value of 0.0036 (more testing is needed to determine if mother’s race is significant for predicting premature). The conditional probability table for mother’s education shows the difference in distribution of conditional probability for some races like mix and white. In addition, the chi-squared test reaffirms the observation by having a p-value of 0.0005 (more testing is needed to determine if mother’s education is significant for predicting premature). The conditional probability table for mother’s income shows no difference in distribution of conditional probability for different income levels. In addition, the chi-squared test reaffirms the observation by having a p-value of 0.9. The conditional probability table for smoke shows some difference in distribution of conditional probability for smoker vs nonsmoker. The chi-squared test has a p-value of 0.07, which is above 0.05 but below 0.1 (more testing is needed to determine if smoke is significant for predicting premature). 
+
+```{r,echo=FALSE,results="hide",warning=FALSE,message=FALSE,fig.width = 4, fig.height = 4}
+#Exploratory Data Analysis
+
+#Mother's Height
+p1=ggplot(smoking,aes(x=mhtc, y=PMF, fill=PMF)) +
+  geom_boxplot() + #coord_flip()# +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Mother's Height vs PM",
+       x="Mother's Height",y='PM') + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#Mother's Weight
+p2=ggplot(smoking,aes(x=mpregwtc, y=PMF, fill=PMF)) +
+  geom_boxplot() + #coord_flip()# +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Mother's Pre-pregnancy Weight vs PM",
+       x="Mother's Pre-pregnancy Weight",y='PM') + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+grid.arrange(p1, p2, ncol = 1)
+```
+
+#### **Model**\newline
+
+After conducting EDA, the next step is to perform preliminary logistic model fitting and model validation for the predictor variables picked for this study (excluding transformation and interaction), which are parity, mrace, mage, med, mht, mpregwt, income, and smoke. The summary table of the preliminary model shows only race (black) and mpregwt are significant, the rest of the predictor variables have a p-value above 0.05. All points of binned raw residuals versus predicted probabilities plot are within the standard error bound and the overall plot appears to be random. For parity, the binned residual plot appears to be random with all points except one within standard error bound. There are not a lot of points in the graph so one point not within standard error bound is significant. For mage, the binned residual plot appears to be random with all points within standard error bound. For mht, the binned residual plot appears to have a trend going up and down with all points within standard error bound. For mpregwt, the binned residual plot appears to be random with all points except three (95% of points still in the bound) within the standard error bound. According to the confusion matrix and ROC curve of the preliminary model, the optimal specificity and sensitivity is (0.620,0.622), the accuracy is 0.62, and AUC is 0.667, which are not ideal. Improvement of preliminary model is required.Through analysis of results of binned residual plots, transformation for mht appears to be necessary because the plot appears to have a trend going up and going down. Both log transformation and quadratic transformation are performed on mht, and the binned residual plot for quadratic transformation produced better result. After performing quadratic transformation, the shape of binned residual plot for mht appears to be more random. However, the confusion matrix and ROC curve are the same with no improvement on AUC, and optimal sensitivity and specificity. Also, the square of mht variable has a p-value of 0.8, which is way above 0.05. There is a possibility that binned residual plot of mht might be exhibiting pattern because there is simply not sufficient data for each bin. 
+
+The next step will be to investigate potential interactions in logistic regression. Since the main purpose of this study is to find the association of mother’s smoking status and pre-term birth, interaction of smoke and each numeric variable will be investigated. Binned plots for mpregwt vs premature by smoke and mage vs premature by smoke shows a difference in distribution between mother who smoke and mother who does not smoke. To answer the question whether ratio of pre-term birth for smokers and non-smokers differs by mother’s race, the interaction of smoking status and mother’s race is also investigated. According to Pearson’s Chi-squared test results, the p-value for smoke vs premature for white ethnicity is lower than 0.05. Therefore, mrace*smoke appears to be a potential limitation.
+
+For this report, stepwise method will be implemented to find the lowest AIC because BIC generally places a heavier penalty on modes with more than 8 variables. The single predictor variables we will include for our full models are parity, mrace, mage, med, mht, mpregwt,income, and smoke. Besides the single predictor variables, we will include seven interactions including 1) smoke and parity 2) smoke and mage 3) smoke and race 4) smoke and mht 5) smoke and income 6) smoke and med 7) smoke and pregwt. After performing stepwise selection, the final model ended up having four predictor variables: med, mrace, mpregwt, and smoke. These four predictor variables match the findings from EDA. However, all interactions are dropped from the model. Through the results of EDA and potential interaction investigation, three potential interactions are identified: 1) mpregwt vs premature by smoke 2) mage vs premature by smoke 3) smoke vs premature by mrace. F-test is conducted to decide whether to drop the interactions, and the result of f test shows including these interactions have a high p-value compare to excluding these interactions. The binned residual plots look random, and 95% of the points are within the standard error bound. The next step is to check the multicollinearity of the final model, and all vif value except education are approximately 1.1, which is acceptable. The reason for the high multicollinearity for education might be because of the insufficient of data for each education group. Also, according to the cooks’s distance and leverage score, there are many points with high leverage score but no influential points. According to the confusion matrix and ROC curve of the final model, the optimal specificity and sensitivity is (0.698,0.524), accuracy is 0.61, and AUC is 0.667, which are still not ideal and around the same as the preliminary model. 
+
+
+
+
+$$log(\frac{\pi_{i}}{1-\pi_{i}}) = \beta x_{i}; Bernoulli(\pi_{i}).$$
+This is the equation of our final model.pi/(1-pi) is the odds of premature for observation i, and x_i is the vector containing the corresponding values for mother's pre-pregnancy weight in pounds, mother's race, and smoke. 
+
+```{r, results='asis',echo=FALSE,warning=FALSE,message=FALSE}
+options(xtable.comment = FALSE)
+sm_race<-glm(formula = PM ~ racem + mpregwtc + sm + racem*sm + edu, family = binomial, 
+    data = smoking)
+print(xtable(sm_race))
+```
+
+ The table below shows the summary of model including the interaction of smoke and race. 
+
+```{r,echo=FALSE,results="hide",warning=FALSE,message=FALSE,fig.width = 4, fig.height = 4}
+
+#let's compare this roc curve to the previous one
+roc(smoking$PM,fitted(sm1),plot=T,legacy.axes=T,print.auc =T,col="red3")
+roc(smoking$PM,fitted(smfinal),plot=T,legacy.axes=T,col="blue3",add=T)
+legend('bottomright', c('initial model','final model'),lty=c(1,1),
+       lwd=c(2,2),col=c('red3','blue3'))
+```
+
+#### **Conclusion**\newline
+
+The intercept of the final model shows mother who has an ethnicity of white, does not smoke, with an education level of less than 8th grade, and with an average pre-pregnancy weight has an odds of having premature birth of **0.41**. As the pre-pregnancy weight of the mother increases by one pound, the odds of having premature birth will decrease by approximately **1%** with all other variables constant. Compare to mother who **does not smoke**, the odds of having premature birth for mother who **does smoke** will increase by approximately **33%** with all other variables constant. It is interesting that only the p-values of the coefficients of Asian group and African American group are lower than 0.05. Compare to mother with an **ethnicity of white**, the odds of having premature birth for mother with an **ethnicity of black** will increase by approximately **187%** with all other variables constant. Compare to mother with an **ethnicity of white**, the odds of having premature birth for mother with an **ethnicity of Asian** will increase by approximately **130%** with all other variables constant. With 95% confidence, the range of the increase of odds of having premature birth for smokers compare to non-smokers with other variables constant is **between -7% and 92%**. Therefore, mothers who smoke tend to have higher odds of premature birth than mothers who do not smoke. Since the p-value for the F-test for including interaction of mrace and smoke is bigger than 0.05, there is not enough evidence to conclude that the association between smoking and premature differs by mother's race. One potential limitation we have for this study is there are not enough data for some population groups like mothers with an education less than 8th grade to accurately calculate the association of the corresponding predictor variables to odds of premature birth. Also, since there are not sufficient data for some bins in the binned residual plot, the average residual for those bins might be inaccurate.
+
+```{r, results='asis',echo=FALSE,warning=FALSE,message=FALSE}
+options(xtable.comment = FALSE)
+sm_final<-glm(formula = PM ~ racem + mpregwtc + sm + edu, family = binomial, 
+    data = smoking)
+print(xtable(sm_final))
+```
+
+The table above shows the summary of final model.
+
+```{r, results='asis',echo=FALSE,warning=FALSE,message=FALSE}
+options(xtable.comment = FALSE)
+print(xtable(confint(sm_final, level = 0.95)))
+```
+
+
+ 

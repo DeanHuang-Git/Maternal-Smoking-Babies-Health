@@ -1,0 +1,386 @@
+---
+title: "Data Analysis Assignment II"
+author: "Dean Huang"
+date: "9/6/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include=FALSE}
+# DO NOT ALTER CODE IN THIS CHUNK
+# The very first time you use this R markdown file, you should install each of the packages below.
+# The same goes for other packages you might decide to use
+# Remember that you only need to install each R package once in R (ever -- unless you change computers).
+# All you need to do whenever you need to use the package again (after restarting the R session),
+# is to use the library function to call the package.
+# For example, type install.packages("knitr") in the console to install the knitr package. 
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+library(xtable)
+library(rms)
+```
+
+* * *
+
+## Lab Report
+
+
+```{r echo=FALSE}
+old<-read.csv('C:/Users/Dean Huang/Documents/Duke University (MIDS 2022)/Fall 2020/IDS 702/Dataset/OldFaithful.csv',stringsAsFactors = FALSE, sep = ",",dec=",")
+
+bb<-read.csv('C:/Users/Dean Huang/Documents/Duke University (MIDS 2022)/Fall 2020/IDS 702/Dataset/babiesdata.csv',stringsAsFactors = FALSE, sep = ",",dec=",")
+
+smoking<-read.csv('C:/Users/Dean Huang/Documents/Duke University (MIDS 2022)/Fall 2020/IDS 702/Dataset/smoking.csv',stringsAsFactors = FALSE, sep = ",",dec=",")
+old$duration<-as.numeric(old$Duration)
+old$durc<-c(scale(old$duration,scale=F))
+
+smoking$edu<-factor(smoking$med)
+smoking$income<-factor(smoking$inc)
+smoking$sm<-factor(smoking$smoke)
+smoking$med[smoking$med==6 | smoking$med==7]<-6
+smoking$mrace[smoking$mrace<6]<-0
+smoking$mhtc <- smoking$mht - mean(smoking$mht)
+smoking$mpregwtc <- smoking$mpregwt - mean(smoking$mpregwt)
+smoking$mht2 <- smoking$mhtc^2
+smoking$mpregwt2 <- smoking$mpregwtc^2
+smoking$racef<-factor(smoking$mrace)
+```
+
+### Question 1: 
+#### **Fit a regression model for predicting the interval between eruptions from the duration of the previous one, to the data, and interpret your results.**\newline 
+
+For each additional minute of eruption duration, the subsequent eruption duration will increase by 11 minutes. According to the intercept of the model after centering, the average subsequent eruption duration is 71 minutes when eruption duration is 3.5 minutes. The adjusted R square of 0.73 means 73% of variation in the response variable is explained by the regression fit.
+
+```{r,results='asis',echo=FALSE}
+model1 <- lm(Interval ~ durc, data = old)
+print(xtable(model1,comment=FALSE))
+```
+
+#### **Include the 95% confidence interval for the slope, and explain what the interval reveals about the relationship between duration and waiting time.**\newline 
+
+We are 95% confident the slope will fall within the range of 69.7 and 72.3. In another words, we are 95% confident for each additional minute of eruption duration, the subsequent eruption duration will increase in the range between 70 and 72 minutes.
+
+```{r,results='asis',echo=FALSE}
+print(xtable(confint(model1, level = 0.95)))
+```
+
+#### **Describe in a few sentences whether or not you think the regression assumptions are plausible based on residual plots (do not include any plots).**
+
+1) Linearity: According to the residual plot for duration, the relationship between duration and interval appears to be linear because the plot seems to be random. However, there are not enough data points between the duration of 2.46 and 3.46 to tell if the graph is completely random.
+2) Normality: According to qqplot, the model appears to be normal because all points appear to be clustered around the 45 degree line. 
+3) Equal Variance & Independence: The points in the residual vs fitted plot look "roughly" random and "roughly" equally spread out around zero. Therefore, no violation to the independence and equal variance assumption. However, there are not enough data points for interval between 55 to 70 to tell if the graph is completely random.
+
+```{r echo=FALSE,results="hide",fig.show = 'hide'}
+
+model1 <- lm(Interval ~ durc, data = old)
+#Check Linearity
+ggplot(model1,aes(x=durc, y=model1$residual)) + geom_point(alpha = .7, col='brown') +  geom_hline(yintercept=0,col="black") + theme_classic() +
+  labs(title="Residuals vs Duration",x="Duration",y="Residuals")+labs(title="Residuals vs Duration",x="Duration",y="Residuals")+theme(plot.title = element_text(hjust = 0.5))
+
+#Check Normality
+plot(model1, which=2, col=c('blue4'))
+
+#Check Independent & Equal Variance
+plot(model1, which=1, col=c('blue4'))
+
+```
+
+#### **Fit another regression model for predicting interval from duration and day. Treat day as a categorical/factor variable. Is there a significant difference in mean intervals for any of the days (compared to the first day)? Interpret the effects of controlling for the days (do so only for the days with significant effects, if any).**\newline 
+There is no significant difference in mean intervals for any of the days because the p-values are all larger than 0.05. Adding the day predictor variable will not help with the prediction of eruption interval.
+
+```{r,results='asis',echo=FALSE}
+old$day<-factor(old$Date)
+model2 <- lm(Interval ~ duration+day, data = old)
+print(xtable(model2))
+```
+
+#### **Perform an F-test to compare this model to the previous model excluding day. In context of the question, what can you conclude from the results of the F-test?**\newline 
+The p-value of F-test is p = 0.7837 which is greater than the significance level 0.05. In conclusion, adding day variable as one of our predictor variables wil not help us make more accurate prediction.
+
+```{r,results='asis',echo=FALSE}
+#model1_predi <- predict(model1, old)
+#model2_predi <- predict(model2, old)
+#RSS1 <- sum((old$Interval - model1_predi)^2)
+#RSS2<-sum((old$Interval - model2_predi)^2)
+#var.test(model1, model2, alternative = "two.sided")
+print(xtable(anova(model1,model2)))
+```
+#### **Using k-fold cross validation (with k=10), compare the average RMSE for this model and the average RMSE for the previous model excluding day. Which model appears to have higher predictive accuracy based on the average RMSE values?**\newline 
+
+The RMSE for model 1 (with no day variable) and model 2 (with day variable) are 6.51 and 6.49 respectively. Therefore, we can conclude the model that include day as the predictor variable has slightly higher accuracy. However, the difference is negligible. Therefore, we can conclude adding day predictor variable will not help with the prediction of interval.
+
+```{r echo=FALSE,results="hide"}
+set.seed(1314)
+old <- old[sample(nrow(old)),]
+K <- 10
+RMSE1 <- matrix(0, nrow = K, ncol= 1)
+kth_fold <- cut(seq(1,nrow(old)), breaks = K, labels = FALSE)
+for (k in 1:K){
+  test_index <- which(kth_fold == k)
+  train <- old[-test_index,]
+  test <- old[test_index,]
+  y_predict <- predict(model1, test)
+  RMSE1[k,] <- sqrt(mean((test$Interval - y_predict)^2))
+}
+
+AVG_RMSE1<-mean(RMSE1)
+
+set.seed(1314)
+old <- old[sample(nrow(old)),]
+K <- 10
+RMSE2 <- matrix(0, nrow = K, ncol= 1)
+kth_fold <- cut(seq(1,nrow(old)), breaks = K, labels = FALSE)
+for (k in 1:K){
+  test_index <- which(kth_fold == k)
+  train <- old[-test_index,]
+  test <- old[test_index,]
+  y_predict <- predict(model2, test)
+  RMSE2[k,] <- sqrt(mean((test$Interval - y_predict)^2))
+}
+
+AVG_RMSE2<-mean(RMSE2)
+```
+
+### Question 2: 
+#### **Summary**\newline 
+
+The main question we are trying to address is "Do mothers who smoke tend to give birth to babies with lower birth weights than mothers who do not smoke?". In addition, we are trying to see if the association between smoking and birth weight differs by mothers race. Through careful analysis of our final model, we will provide an estimate range for the difference in birth weights for smokers and non-smokers, and highlight interesting association with birth weight that are worth mentioning. We will begin the study by conducting EDA to check the association of predictor variables and response variable, and highlight the preliminary concerns we have with the response and predictor variables. Next, we will explore potential interactions of the model to see if there is a difference in data trend for different population groups.Last but not least, we will perform data modeling and model assessment to find the appropriate model for prediction and answer our inferential questions. The outcome of the study shows mothers who smoke tend to give birth to babies with lower weights than mothers who do not smoke. However, we do not have enough evidence to conclude that the association between smoking and birth weight differs by mother's race.
+
+#### **Introduction**\newline 
+
+Since we are only interested with the association between the smoking status of mother and birth weight, we will remove the variables that are either irrelevant or insignificant to our question. These variables include id, birth, gestation, drace, ded, dht, dwt, marital, time, number, and premature.The response variable we are interested in looking to is bwt.oz, and the predictor variables we are interested in looking to are parity, mrace, mage, med, mht, mpregwt,income, and smoke. To facilitate the EDA, data modeling, and model assessment processes, we will remove data rows with one or more missing values. We will use boxplots for categorical variable and scatterplots for continuous variables to not only find the association between predictor variable and response variable but also possible interactions. Next, we will employ backward selection and F-test to find our final model. Last but not least, we will check if our final model fulfill the linear assumptions, and do not have multicollinearity and outliers.
+
+#### **Data**\newline 
+
+According to the histogram of the bwt.oz, the distribution appears to be normal. Hence, transformation of response variable is not needed for now. Since there are no unknown values for parity, we will treat parity as a discrete variable when perform EDA. The scatter plot of parity vs bwt.oz appears to have a weak or close to zero correlation with the fitted line close to horizontal. We might drop parity depending on the results of data modeling and modeling assessment. Since mrace is categorical variable, we will start by factoring the variable then draw a boxplot to observe the association between mrace and bwt.oz. The box plot shows there is a minor difference in distribution of bwt.oz for different race grops. Since mage is a discrete variable, we will draw a scatter plot to observe its association with bwt.oz. The scatter plot of mage vs bwt.oz appears to have a close to zero or weak correlation with the fitted line close to horizontal. Since med is categorical variable, we will start by factoring the variable then draw a boxplot to observe the association between med and bwt.oz. The box plot shows there is a minor difference in distribution of bwt.oz for different mother’s education levels. Since mht is a discrete variable, we will draw a scatter plot to observe its association with bwt.oz. The scatter plot of mht vs bwt.oz appears to have a weak positive correlation. Since mpregwt is a discrete variable, we will draw a scatter plot to observe its association with bwt.oz. The scatter plot of mpregwt vs bwt.oz appears to have a weak positive correlation. Since inc is categorical variable, we will start by factoring the variable then draw a boxplot to observe the association between family income and bwt.oz. The box plot shows there is a minor difference in distribution of bwt.oz for different levels of family income. Since smoke is a categorical variable, we will start by factoring the variable then draw a boxplot to observe the association between smoking status of mother and bwt.oz. The box plot shows there is a minor difference in distribution of bwt.oz for difference in smoking status (the distribution for smoker is slightly lower than the distribution for nonsmoker).
+Next, we will explore the interactions of predictor variables. The first interaction we would like to explore is birth weight in ounces vs mother’s pre-pregnancy weight in pounds by mother’s height. The reason we picked this interaction to explore is because there is a possibility that bwt.oz vs mregwt has a different distribution for mother with different heights because scientifically a mother's height does affect a mother's pre-pregnany weight. The trend of bwt.oz vs mpregwt appears to be different for height group of 59 inches, and this might be due to the lack of data in this particular height group (interaction might be needed for these two predictor variables). The second interaction we would like to explore is birth weight in ounces vs smoking by mother’s race. The main reason we picked this interaction to explore is address the questions on the possibility of bwt.oz vs smoking having a different distribution for mothers in different ethnic groups. The trend of bwt.oz vs smoke appears to be the same for all racial groups. The last interaction we would like to explore is birth weight in ounces vs smoking by family income. The main reason we picked this interaction to explore is to address the questions on the possibility of bwt.oz vs smoking having different distributions for different family income groups. The trend of bwt.oz vs smoke appears to be the same for all levels of family income.
+```{r echo=FALSE}
+#Third, bwt.oz` and `smoking` by `race`
+ggplot(smoking,aes(x=sm, y=bwt.oz, fill=sm)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birth Weight in Ounces vs Smoke by Race",x="Smoke",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none") +
+  facet_wrap( ~ racef,ncol=8)+theme(plot.title = element_text(hjust = 0.5))
+
+#mpregwt
+ggplot(smoking,aes(x=mpregwt, y=bwt.oz)) +
+  geom_point(alpha = .5,colour="blue4") +
+  geom_smooth(method="lm",col="red3") + theme_classic() +
+  labs(title="Birth Weight in Ounces vs Mother's Weight Before Pregnancy",x="Mother's Weight Before Pregnancy",y="Birth Weight in Ounces")+theme(plot.title = element_text(hjust = 0.5))
+```
+
+#### **Model**\newline
+
+For this report, we will be implementing backward selection to find the model that has the lowest BIC. The reason we picked BIC over AIC is because BIC generally places a heavier penalty on modes with more than 8 variables. The single predictor variables we will include for our full models are parity, mrace, mage, med, mht, mpregwt,income, and smoke. Besides the single predictor variables, we will include seven interactions including 1) smoke and parity 2) smoke and mage 3) smoke and race 4) smoke and mht 5) smoke and income 6)mpregwt and mht.Before performing backward selection, we will center the variables mht and mpregwt to make the interpretation of intercept more meaningful. After performing backward selection, the final model ended up having four predictor variables: mrace, mht, mpregwt, and smoke. These four predictor variables match our findings from EDA. However, all interactions are dropped from the model. In order to address the question on the association between smoking and birth weight differs by mother’s race, we will have to perform model assessment for the interaction, race and smoke, to see if including the interaction is helpful for the prediction of bwt.oz. In addition, through our observations from EDA, we identify one potential interaction, mpregwt and mht, that appears to have different trends for different groups. Therefore, we will also perform model assessment for this interaction.  
+
+We will use F-test to determine if there is a need to add the interaction to our model. According to the summary table of our model including the interaction of mpregwt and mht, the p-value is larger than 0.05. In addition, the result of f test shows including this interaction has a high p-value compare to excluding this interaction. Therefore, we will not include this interaction in our final model. According to the summary table of our model including the interaction of smoke and mrace, the p-value is larger than 0.05. In addition, the result of f test shows including this interaction has a high p-value compare to excluding this interaction.Therefore, we will not include this interaction in our final model. The next step will be to check the multicollinearity of the model. According to our results, the vif value for mht is 1.3, the vif value for mpregwt is 1.27, and the vif value for smoke is 1.01, which are acceptable. For the linearity assumption, the residual plots for mht vs bwt.oz and mpregwt vs bwt.oz appear to be linear because the plot seems random.The residual fitted plot looks random and "roughly" equally spread out around zero. Therefore, no violation to the independence and equal variance assumption. Most points appear to cluster around the 45 degree line of the qq-plot with some points at both end of tails deviate from the 45 degree line. Overall, the model satisfies the normality assumption. Next, we will check if there are any outliers, leverage points or influential points. There appears to be no influential points and outliers according to the graph of cook's distance. However, there are some leverage points that are not influential.
+
+$$y_i = \beta x_{i}+ \epsilon_i; \ \ \epsilon_i \overset{iid}{\sim} N(0, \sigma^2).$$
+This is the equation of our final model.y_i is the birth weight in ounces for observation i, and x_i is the vector containing the corresponding values for mother's pre-pregnancy weight in pounds, mother's height in inches, and smoke. 
+
+
+```{r,results='asis',echo=FALSE}
+#Check Normality
+Full <- lm(bwt.oz~parity+racef+mage+edu+mhtc+mpregwtc+income+sm+sm*parity+sm*mage+sm*racef+sm*mhtc+sm*income+mpregwtc*mhtc,data=smoking)
+n <- nrow(smoking)
+Back_BIC <- step(Full,direction="backward",trace=0,k = log(n))
+Back_BIC3<-lm(bwt.oz~mhtc+mpregwtc+sm*racef+sm,data=smoking)
+print(xtable(Back_BIC3))
+```
+The table above shows the summary of model including the interaction of smoke and race.
+
+#### **Conclusion**\newline
+
+The intercept of our final model shows mother who does not smoke with average height and average pre-pregnancy weight will give birth to a child with 124.5 ounces. As the height of mother increases by one inch, the weight of the child will increase by 0.88 ounces given all other variables are constant. As the pre-pregnancy weight of the mother increases by one pound given all the other variables are constant, the weight of the child will increase by 0.11 lbs given all other variables are constant. Given all the other variables are constant, the birth weight of a child will decreases by 9.06 when the mother smokes compare to mother who does not smoke. With 95% confidence, the range for the difference in birth weights for smokers and non smokers is between -11.35 and -6.77. Therefore, mothers who smoke tend to give birth to babies with lower weights than mothers who do not smoke. The adjusted R square of 0.11 means 11% of variation in the response variable is explained by the regression fit. Since the p-value for the F-test for including interaction of mrace and smoke is bigger than 0.05, we do not have enough evidence to conclude that the association between smoking and birth weight differs by mother's race. However, the p-value for mother with the ethnicity of black who smokes is smaller than 0.05. Therefore, it appears to be some association between smoking and birth weight for mothers in the ethnicity group of black. One potential limitation we have for this study is that we do not look at the the impact of smoking on gestation age. Gestation age is important because the higher the gestational age, the higher the birth weight for children. The second limitation is that there are not enough data for some population groups like mothers with an education less than 8th grade to accurately calculate the association of the corresponding predictor variables to bwt.oz. 
+
+```{r, results='asis',echo=FALSE}
+Full <- lm(bwt.oz~parity+racef+mage+edu+mhtc+mpregwtc+income+sm+sm*parity+sm*mage+sm*racef+sm*mhtc+sm*income+mpregwtc*mhtc,data=smoking)
+n <- nrow(smoking)
+Back_BIC <- step(Full,direction="backward",trace=0,k = log(n))
+print(xtable(Back_BIC))
+```
+
+#### **Appendix**\newline
+
+```{r echo=FALSE,results="hide"}
+smoking$med[smoking$med==6 | smoking$med==7]<-6
+smoking$mrace[smoking$mrace<6]<-0
+#Normality of Response Variable
+ggplot(smoking,aes(x=bwt.oz)) +
+  geom_histogram(aes(y=..density..),color="black",linetype="dashed",
+                 fill=rainbow(12),binwidth = 10) +
+  geom_density(alpha=.25, fill="lightblue") +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Distribution of Birth Weight in Ounces",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#Since the histogram of birth weight in ounces appears to be normal, there is no need to perform transformation for the response variable.
+
+#Explore the relationship between response variable and each predictor variable
+
+#Parity
+ggplot(smoking,aes(x=parity, y=bwt.oz)) +
+  geom_point(alpha = .5,colour="blue4") +
+  geom_smooth(method="lm",col="red3") + theme_classic() +
+  labs(title="Birth Weight in Ounces vs Parity",x="Parity",y="Birth Weight in Ounces")+theme(plot.title = element_text(hjust = 0.5))
+#According to the scatterplot, changing of parity does not appears to be changing bwt.oz because the fitted line is horizontal.
+
+#mrace
+smoking$racef<-factor(smoking$mrace)
+ggplot(smoking,aes(x=racef, y=bwt.oz, fill=racef)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birth Weight in Ounces vs Mother's Race",x="Mother's Race",y="Birthweight in Ounces") + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#The box plot shows there is a minor difference in distribution of bwt.oz for race of mother.
+
+#mage
+ggplot(smoking,aes(x=mage, y=bwt.oz)) +
+  geom_point(alpha = .5,colour="blue4") +
+  geom_smooth(method="lm",col="red3") + theme_classic() +
+  labs(title="Birth Weight in Ounces vs Mother's Age",x="Mother's Age",y="Birth Weight in Ounces")+theme(plot.title = element_text(hjust = 0.5))
+#According to the scatterplot, changing of mother's age does not appears to be changing bwt.oz because the fitted line is horizontal.
+
+#med
+smoking$edu<-factor(smoking$med)
+ggplot(smoking,aes(x=edu, y=bwt.oz, fill=edu)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birt Weight in Ounces vs Mother's Education",x="Mother's Education",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#The box plot shows there is a minor difference in distribution of bwt.oz for education of mother.
+
+#mht
+ggplot(smoking,aes(x=mht, y=bwt.oz)) +
+  geom_point(alpha = .5,colour="blue4") +
+  geom_smooth(method="lm",col="red3") + theme_classic() +
+  labs(title="Birth Weight in Ounces vs Mother's Height",x="Mother's Height",y="Birth Weight in Ounces")+theme(plot.title = element_text(hjust = 0.5))
+#According to the scatterplot, changing of mother's height does change the bwt.oz but the graph does not appears to be linear.
+
+#mpregwt
+ggplot(smoking,aes(x=mpregwt, y=bwt.oz)) +
+  geom_point(alpha = .5,colour="blue4") +
+  geom_smooth(method="lm",col="red3") + theme_classic() +
+  labs(title="Birth Weight in Ounces vs Mother's Weight Before Pregnancy",x="Mother's Weight Before Pregnancy",y="Birth Weight in Ounces")+theme(plot.title = element_text(hjust = 0.5))
+#According to the scatterplot, mother's weight before pregnancy does affect bwt.oz but the graph does not appears to be linear.
+
+#inc
+smoking$income<-factor(smoking$inc)
+ggplot(smoking,aes(x=income, y=bwt.oz, fill=income)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birt Weight in Ounces vs Family Income",x="Family Income",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#The box plot shows there is a minor difference in distribution of bwt.oz for family income.
+
+#smoke
+smoking$sm<-factor(smoking$smoke)
+ggplot(smoking,aes(x=sm, y=bwt.oz, fill=sm)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birth Weight in Ounces vs Smoking",x="Smoking",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5))
+#The box plot shows there is a minor difference in smoking status and bwt.oz.
+
+#Interaction
+#First, bwt.oz` and `Mother's Education` by `Race`
+ggplot(smoking,aes(x=edu, y=bwt.oz, fill=edu)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birth Weight in Ounces vs Mother's Education by Race",x="Mother's Education",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none") +
+  facet_wrap( ~ racef,ncol=8)+theme(plot.title = element_text(hjust = 0.5))
+#Looks like the relationship between bwt.oz and mother's education changes some by mother's race
+#Might need that interaction
+
+#Second, bwt.oz` and `mpregwt` by `mht`
+ggplot(smoking,aes(x=mpregwt, y=bwt.oz)) +
+  geom_point(alpha = .5,colour="blue4") +
+  geom_smooth(method="lm",col="red3") + theme_classic() +
+  labs(title="Birth Weight in Ounces vs Mother's Pre-pregnancy Weights by Mother's Height",x="Mother's Pre-pregnancy Weights",y="Birth Weight in Ounces") +
+  facet_wrap( ~ mht,ncol=8)+theme(plot.title = element_text(hjust = 0.5))
+#Looks like the relationship between bwt.oz and mpregwt changes some by mht.
+#Might need that interaction
+
+#Third, bwt.oz` and `smoking` by `race`
+ggplot(smoking,aes(x=sm, y=bwt.oz, fill=sm)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birth Weight in Ounces vs Smoke",x="Smoke",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none") +
+  facet_wrap( ~ racef,ncol=8)+theme(plot.title = element_text(hjust = 0.5))
+
+#Fourth, bwt.oz` and `smoking` by `income`
+ggplot(smoking,aes(x=sm, y=bwt.oz, fill=sm)) +
+  geom_boxplot() + #coord_flip() +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Birth Weight in Ounces vs Smoke",x="Smoke",y="Birth Weight in Ounces") + 
+  theme_classic() + theme(legend.position="none") +
+  facet_wrap( ~ income,ncol=8)+theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE,results="hide"}
+smoking$mhtc <- smoking$mht - mean(smoking$mht)
+smoking$mpregwtc <- smoking$mpregwt - mean(smoking$mpregwt)
+smoking$mht2 <- smoking$mhtc^2
+smoking$mpregwt2 <- smoking$mpregwtc^2
+Null <- lm(bwt.oz~sm*racef+1,data=smoking)
+Full <- lm(bwt.oz~parity+racef+mage+edu+mhtc+mpregwtc+income+sm+sm*parity+sm*mage+sm*racef+sm*mhtc+sm*income+mpregwtc*mhtc,data=smoking)
+n <- nrow(smoking)
+#Stepwise Method
+#stepwise<-step(Null,scope=formula(Full),direction='both',trace=0)
+#stepwise$call
+#stepwise2 <- step(Null,scope=formula(Full),direction='both',trace = 0, k = log(n))
+#stepwise2$call
+#summary(stepwise)
+#summary(stepwise2)
+
+#Backward Selection
+Back_BIC <- step(Full,direction="backward",trace=0,k = log(n))
+#summary(Back_BIC)
+#Back_AIC <- step(Full,direction="backward",trace=0)
+# Let's see the variables the model selected
+#Back_BIC$call
+#Back_AIC$call
+
+#Back_BIC1<-lm(bwt.oz~racef+sm+mhtc+mpregwtc+mpregwtc*mhtc,data=smoking)
+#summary(Back_BIC1)
+#anova(Back_BIC,Back_BIC1)
+
+#Back_BIC2<-lm(bwt.oz~racef+sm+mhtc+mpregwtc+smoke*racef,data=smoking)
+#summary(Back_BIC2)
+#anova(Back_BIC,Back_BIC2)
+Back_BIC3<-lm(bwt.oz~mhtc+mpregwtc+edu*racef+sm,data=smoking)
+summary(Back_BIC3)
+#anova(Back_BIC,Back_BIC3)
+#vif(Back_BIC3)
+
+#Check Linearity
+ggplot(smoking,aes(x=mhtc, y=Back_BIC$residual)) + 
+  geom_point(alpha = .7) +  geom_hline(yintercept=0,col="red3") + theme_classic() +
+  labs(title="Residuals vs Mother's Height",x="Mht",y="Residuals")
+
+ggplot(smoking,aes(x=mpregwtc, y=Back_BIC$residual)) + 
+  geom_point(alpha = .7) +  geom_hline(yintercept=0,col="red3") + theme_classic() +
+  labs(title="Residuals vs Mother's Height",x="Mht",y="Residuals")
+
+#Check Independence & Equal Variance
+plot(Back_BIC, which=1, col=c('black'))
+
+#Check Normality
+plot(Back_BIC, which=2, col=c('black'))
+
+#Check Outliers
+n <- nrow(model.matrix(Back_BIC)); p <- ncol(model.matrix(Back_BIC))
+lev_scores <- hatvalues(Back_BIC) #can also use influence(regwagecsquares)$hat 
+plot(lev_scores,col=ifelse(lev_scores > (2*p/n), 'red2', 'navy'),type="h",
+ylab="Leverage score",xlab="Index",main="Leverage Scores for all observations")
+text(x=c(1:n)[lev_scores > (2*p/n)]+c(rep(2,4),-2,2),y=lev_scores[lev_scores > (2*p/n)], labels=c(1:n)[lev_scores > (2*p/n)])
+
+plot(Back_BIC, which = 4, col= c('blue'))
+plot(Back_BIC, which = 5, col= c('blue4'))
+
+```
